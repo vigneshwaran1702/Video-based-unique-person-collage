@@ -1,0 +1,19 @@
+{
+  "name": "unique-person-collage",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "vite"
+  },
+  "dependencies": {
+    "lucide": "^0.460.0",
+    "canvas-confetti": "^1.9.3"
+  },
+  "devDependencies": {
+    "vite": "^6.0.1"
+  }
+}
