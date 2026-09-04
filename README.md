@@ -83,8 +83,3 @@ An intelligent Android application that processes input videos, detects and trac
 - **Min SDK**: API 26 (Android 8.0)
 - **Target SDK**: API 35 (Android 15)
 
----
-
-## 📄 License
-
-MIT License - Copyright (c) 2026
