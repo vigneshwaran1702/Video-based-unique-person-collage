@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Unique Person Collage</string>
+    <string name="select_video">Select Video</string>
+    <string name="processing">Processing Video...</string>
+    <string name="unique_people_detected">Unique People Detected</string>
+    <string name="generate_collage">Generate Collage</string>
+    <string name="save_to_gallery">Save to Gallery</string>
+    <string name="share_collage">Share Collage</string>
+</resources>
