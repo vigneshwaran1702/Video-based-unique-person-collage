@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="/assets/index-DisCd5_T.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-CbNOiyiR.css">
+  <script type="module" crossorigin src="/assets/index-DKvdA-9t.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CGRnMC3W.css">
 </head>
 <body>
   <div id="app" class="app-container">
@@ -25,7 +25,17 @@
         </div>
       </div>
       <div class="header-status">
-        <span class="status-chip"><span class="pulse-dot"></span> WebAssembly / Canvas Ready</span>
+        <div id="supabaseStatusChip" class="status-chip cloud-status" title="Supabase Cloud Connection">
+          <span class="pulse-dot"></span> <span id="supabaseStatusText">Connecting Supabase...</span>
+        </div>
+        <button id="btnOpenGallery" class="header-nav-btn" title="View Cloud Saved Collages">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Cloud Gallery
+        </button>
+        <button id="btnOpenAuth" class="header-nav-btn auth-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span id="userStatusText">Sign In</span>
+        </button>
       </div>
     </header>
 
@@ -169,6 +179,10 @@
               <p id="resultSummaryText" class="studio-subtitle">Identified 4 unique individuals across video</p>
             </div>
             <div class="studio-actions">
+              <button id="btnSaveCloud" class="action-btn cloud">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><polyline points="12 11 12 17"/><polyline points="9 14 12 11 15 14"/></svg>
+                <span>Save to Supabase</span>
+              </button>
               <button id="btnDownloadCollage" class="action-btn primary">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                 Download Collage
@@ -202,6 +216,78 @@
         </div>
       </section>
     </main>
+
+    <!-- Cloud Gallery Modal -->
+    <div id="galleryModal" class="modal-backdrop hidden">
+      <div class="modal-card glass-panel">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <h3>Supabase Cloud Gallery</h3>
+          </div>
+          <button id="btnCloseGallery" class="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="galleryLoading" class="gallery-loading hidden">
+            <div class="spinner"></div>
+            <span>Fetching collages from Supabase...</span>
+          </div>
+          <div id="galleryEmpty" class="gallery-empty hidden">
+            <p>No saved collages found yet in Supabase.</p>
+            <span class="subtext">Generate a collage and click "Save to Supabase" to store it in the cloud!</span>
+          </div>
+          <div id="galleryList" class="gallery-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Supabase Auth Modal -->
+    <div id="authModal" class="modal-backdrop hidden">
+      <div class="modal-card auth-modal-card glass-panel">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <h3 id="authModalTitle">Supabase Account</h3>
+          </div>
+          <button id="btnCloseAuth" class="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body auth-body">
+          <div id="authenticatedView" class="auth-logged-in hidden">
+            <div class="user-avatar-pill">
+              <span id="userEmailDisplay">user@example.com</span>
+            </div>
+            <p class="auth-info-note">You are connected to Supabase. All generated collages will sync to your account.</p>
+            <button id="btnSignOut" class="primary-btn danger-btn">Sign Out</button>
+          </div>
+
+          <div id="unauthenticatedView">
+            <div class="auth-tabs">
+              <button class="auth-tab-btn active" id="tabSignIn">Sign In</button>
+              <button class="auth-tab-btn" id="tabSignUp">Sign Up</button>
+            </div>
+
+            <form id="authForm" class="auth-form">
+              <div class="form-group">
+                <label for="authEmail">Email</label>
+                <input type="email" id="authEmail" required placeholder="you@example.com" class="form-input">
+              </div>
+              <div class="form-group">
+                <label for="authPassword">Password</label>
+                <input type="password" id="authPassword" required minlength="6" placeholder="••••••••" class="form-input">
+              </div>
+              <div id="authErrorMsg" class="auth-error-msg hidden"></div>
+              <button type="submit" id="btnSubmitAuth" class="primary-btn">Sign In</button>
+            </form>
+
+            <div class="auth-divider"><span>OR</span></div>
+            <button id="btnGuestAuth" class="guest-btn">Continue as Guest / Anonymous</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="toast-container"></div>
   </div>
 
   <!-- Hidden video and worker elements -->
