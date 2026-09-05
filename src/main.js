@@ -5,6 +5,17 @@ import { FaceEmbedder } from './engine/faceEmbedder.js';
 import { IdentityClusterer } from './engine/identityClusterer.js';
 import { QualityScorer } from './engine/qualityScorer.js';
 import { CollageRenderer } from './engine/collageRenderer.js';
+import {
+  testSupabaseConnection,
+  getSessionUser,
+  signInUser,
+  signUpUser,
+  signInGuest,
+  signOutUser,
+  saveCollageToSupabase,
+  fetchSavedCollages,
+  deleteCollage
+} from './supabase.js';
 import confetti from 'canvas-confetti';
 
 // DOM Elements
@@ -41,6 +52,34 @@ const personsList = document.getElementById('personsList');
 const resultSummaryText = document.getElementById('resultSummaryText');
 const btnDownloadCollage = document.getElementById('btnDownloadCollage');
 const btnShareCollage = document.getElementById('btnShareCollage');
+const btnSaveCloud = document.getElementById('btnSaveCloud');
+
+// Supabase UI Elements
+const supabaseStatusChip = document.getElementById('supabaseStatusChip');
+const supabaseStatusText = document.getElementById('supabaseStatusText');
+const btnOpenGallery = document.getElementById('btnOpenGallery');
+const btnOpenAuth = document.getElementById('btnOpenAuth');
+const userStatusText = document.getElementById('userStatusText');
+const galleryModal = document.getElementById('galleryModal');
+const btnCloseGallery = document.getElementById('btnCloseGallery');
+const galleryLoading = document.getElementById('galleryLoading');
+const galleryEmpty = document.getElementById('galleryEmpty');
+const galleryList = document.getElementById('galleryList');
+const authModal = document.getElementById('authModal');
+const btnCloseAuth = document.getElementById('btnCloseAuth');
+const authenticatedView = document.getElementById('authenticatedView');
+const unauthenticatedView = document.getElementById('unauthenticatedView');
+const userEmailDisplay = document.getElementById('userEmailDisplay');
+const tabSignIn = document.getElementById('tabSignIn');
+const tabSignUp = document.getElementById('tabSignUp');
+const authForm = document.getElementById('authForm');
+const authEmail = document.getElementById('authEmail');
+const authPassword = document.getElementById('authPassword');
+const authErrorMsg = document.getElementById('authErrorMsg');
+const btnSubmitAuth = document.getElementById('btnSubmitAuth');
+const btnGuestAuth = document.getElementById('btnGuestAuth');
+const btnSignOut = document.getElementById('btnSignOut');
+const toastContainer = document.getElementById('toastContainer');
 
 // Demo Buttons
 const btnDemoInterview = document.getElementById('btnDemoInterview');
@@ -406,3 +445,269 @@ btnShareCollage.addEventListener('click', async () => {
     btnDownloadCollage.click();
   }
 });
+
+// Toast notification helper
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  toastContainer.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100%)';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+// -------------------------------------------------------------
+// Supabase Backend Integration
+// -------------------------------------------------------------
+
+// 1. Initial Connection & User State Check
+async function initializeSupabase() {
+  try {
+    const conn = await testSupabaseConnection();
+    if (conn.connected) {
+      supabaseStatusChip.classList.remove('offline');
+      supabaseStatusText.textContent = 'Supabase Connected';
+    } else {
+      supabaseStatusChip.classList.add('offline');
+      supabaseStatusText.textContent = 'Supabase Offline';
+    }
+
+    const currentUser = await getSessionUser();
+    updateAuthUI(currentUser);
+  } catch (e) {
+    supabaseStatusChip.classList.add('offline');
+    supabaseStatusText.textContent = 'Supabase Offline';
+  }
+}
+
+function updateAuthUI(user) {
+  if (user) {
+    const label = user.is_anonymous ? 'Guest User' : (user.email || 'Connected User');
+    userStatusText.textContent = label.length > 15 ? label.slice(0, 12) + '...' : label;
+    userEmailDisplay.textContent = user.is_anonymous ? 'Logged in as Guest' : user.email;
+    authenticatedView.classList.remove('hidden');
+    unauthenticatedView.classList.add('hidden');
+  } else {
+    userStatusText.textContent = 'Sign In';
+    authenticatedView.classList.add('hidden');
+    unauthenticatedView.classList.remove('hidden');
+  }
+}
+
+// 2. Save Collage to Supabase Cloud
+btnSaveCloud.addEventListener('click', async () => {
+  if (!currentPersonsResult || currentPersonsResult.length === 0) {
+    showToast('No collage generated yet to save!', 'error');
+    return;
+  }
+
+  const origHtml = btnSaveCloud.innerHTML;
+  btnSaveCloud.disabled = true;
+  btnSaveCloud.innerHTML = `
+    <div class="spinner" style="width:16px;height:16px;border-width:2px;"></div>
+    <span>Saving to Supabase...</span>
+  `;
+
+  try {
+    const dataUrl = collageCanvas.toDataURL('image/png', 0.95);
+    const videoTitle = currentVideoInfo?.name || 'video_clip';
+    
+    await saveCollageToSupabase({
+      title: `${videoTitle} - Collage (${currentPersonsResult.length} persons)`,
+      videoName: videoTitle,
+      collageDataUrl: dataUrl,
+      style: selectedStyle,
+      persons: currentPersonsResult,
+      fps: parseFloat(fpsSlider.value),
+      clusteringThreshold: parseFloat(threshSlider.value)
+    });
+
+    showToast('Collage successfully saved to Supabase cloud!', 'success');
+  } catch (err) {
+    console.error('Supabase save error:', err);
+    showToast(`Saved locally (Note: Ensure Supabase schema is run in SQL Editor): ${err.message}`, 'error');
+  } finally {
+    btnSaveCloud.disabled = false;
+    btnSaveCloud.innerHTML = origHtml;
+  }
+});
+
+// 3. Cloud Gallery Modal
+btnOpenGallery.addEventListener('click', async () => {
+  galleryModal.classList.remove('hidden');
+  await loadCloudGallery();
+});
+
+btnCloseGallery.addEventListener('click', () => {
+  galleryModal.classList.add('hidden');
+});
+
+async function loadCloudGallery() {
+  galleryList.innerHTML = '';
+  galleryLoading.classList.remove('hidden');
+  galleryEmpty.classList.add('hidden');
+
+  try {
+    const items = await fetchSavedCollages();
+    galleryLoading.classList.add('hidden');
+
+    if (!items || items.length === 0) {
+      galleryEmpty.classList.remove('hidden');
+      return;
+    }
+
+    items.forEach((item) => {
+      const card = document.createElement('div');
+      card.className = 'gallery-item-card';
+
+      const imgSrc = item.image_url || item.image_data_url || '';
+      const dateStr = item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recent';
+
+      card.innerHTML = `
+        <img class="gallery-thumb" src="${imgSrc}" alt="${item.title || 'Collage'}" />
+        <div class="gallery-info">
+          <div class="gallery-item-title" title="${item.title}">${item.title || 'Person Collage'}</div>
+          <div class="gallery-item-meta">${item.unique_persons_count || 0} unique persons • ${item.collage_style || 'Grid'}</div>
+          <div class="gallery-item-meta" style="color: var(--text-muted);">${dateStr}</div>
+          <div class="gallery-actions">
+            <button class="gallery-btn download-cloud-btn">Download</button>
+            <button class="gallery-btn delete-btn delete-cloud-btn">Delete</button>
+          </div>
+        </div>
+      `;
+
+      // Download action
+      const btnDl = card.querySelector('.download-cloud-btn');
+      btnDl.addEventListener('click', () => {
+        const a = document.createElement('a');
+        a.href = imgSrc;
+        a.download = `${item.title || 'collage'}.png`;
+        a.target = '_blank';
+        a.click();
+      });
+
+      // Delete action
+      const btnDel = card.querySelector('.delete-cloud-btn');
+      btnDel.addEventListener('click', async () => {
+        if (confirm('Delete this collage from Supabase?')) {
+          btnDel.disabled = true;
+          try {
+            await deleteCollage(item.id, item.storage_path);
+            card.remove();
+            showToast('Deleted from cloud.', 'success');
+            if (galleryList.children.length === 0) {
+              galleryEmpty.classList.remove('hidden');
+            }
+          } catch (e) {
+            showToast(`Delete failed: ${e.message}`, 'error');
+            btnDel.disabled = false;
+          }
+        }
+      });
+
+      galleryList.appendChild(card);
+    });
+  } catch (err) {
+    galleryLoading.classList.add('hidden');
+    galleryEmpty.classList.remove('hidden');
+    galleryEmpty.querySelector('p').textContent = 'Could not load collages.';
+    galleryEmpty.querySelector('.subtext').textContent = err.message;
+  }
+}
+
+// 4. Supabase Auth Handling
+let authMode = 'SIGN_IN';
+
+btnOpenAuth.addEventListener('click', () => {
+  authModal.classList.remove('hidden');
+  authErrorMsg.classList.add('hidden');
+});
+
+btnCloseAuth.addEventListener('click', () => {
+  authModal.classList.add('hidden');
+});
+
+tabSignIn.addEventListener('click', () => {
+  authMode = 'SIGN_IN';
+  tabSignIn.classList.add('active');
+  tabSignUp.classList.remove('active');
+  btnSubmitAuth.textContent = 'Sign In';
+  authErrorMsg.classList.add('hidden');
+});
+
+tabSignUp.addEventListener('click', () => {
+  authMode = 'SIGN_UP';
+  tabSignUp.classList.add('active');
+  tabSignIn.classList.remove('active');
+  btnSubmitAuth.textContent = 'Sign Up';
+  authErrorMsg.classList.add('hidden');
+});
+
+authForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  authErrorMsg.classList.add('hidden');
+  btnSubmitAuth.disabled = true;
+  btnSubmitAuth.textContent = 'Processing...';
+
+  try {
+    const email = authEmail.value.trim();
+    const pass = authPassword.value;
+
+    let user;
+    if (authMode === 'SIGN_IN') {
+      user = await signInUser(email, pass);
+      showToast('Signed in successfully!', 'success');
+    } else {
+      user = await signUpUser(email, pass);
+      showToast('Sign up completed!', 'success');
+    }
+
+    updateAuthUI(user);
+    authModal.classList.add('hidden');
+  } catch (err) {
+    authErrorMsg.textContent = err.message;
+    authErrorMsg.classList.remove('hidden');
+  } finally {
+    btnSubmitAuth.disabled = false;
+    btnSubmitAuth.textContent = authMode === 'SIGN_IN' ? 'Sign In' : 'Sign Up';
+  }
+});
+
+btnGuestAuth.addEventListener('click', async () => {
+  btnGuestAuth.disabled = true;
+  try {
+    const user = await signInGuest();
+    updateAuthUI(user);
+    authModal.classList.add('hidden');
+    showToast('Signed in as Guest!', 'success');
+  } catch (err) {
+    showToast(`Guest login error: ${err.message}`, 'error');
+  } finally {
+    btnGuestAuth.disabled = false;
+  }
+});
+
+btnSignOut.addEventListener('click', async () => {
+  try {
+    await signOutUser();
+    updateAuthUI(null);
+    authModal.classList.add('hidden');
+    showToast('Signed out successfully.', 'info');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+// Close modals when clicking backdrop
+[galleryModal, authModal].forEach((m) => {
+  m.addEventListener('click', (e) => {
+    if (e.target === m) m.classList.add('hidden');
+  });
+});
+
+// Run Supabase initialization on start
+initializeSupabase();
+
