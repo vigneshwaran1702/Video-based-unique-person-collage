@@ -10,8 +10,10 @@
     "start": "vite"
   },
   "dependencies": {
-    "lucide": "^0.460.0",
-    "canvas-confetti": "^1.9.3"
+    "@supabase/ssr": "^0.12.6",
+    "@supabase/supabase-js": "^2.115.0",
+    "canvas-confetti": "^1.9.3",
+    "lucide": "^0.460.0"
   },
   "devDependencies": {
     "vite": "^6.0.1"
